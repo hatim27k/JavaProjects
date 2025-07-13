@@ -323,3 +323,123 @@ class AtomicCounter {
 -----
 
 This handout covers the essential synchronization constructs you're likely to encounter or need to implement in a Java SDE interview.
+
+### **`CyclicBarrier`**
+
+A `CyclicBarrier` is a synchronization aid that allows a set of threads to all wait for each other to reach a common barrier point. Once all threads have arrived at the barrier, they are all released simultaneously. The "cyclic" part means that the barrier can be reused once the waiting threads are released. It's useful for scenarios where multiple threads need to perform independent tasks and then collectively pause before starting the next phase of computation.
+
+**Example Scenario:** Imagine a multi-player racing game where all players (threads) need to be at the starting line before the race can begin. After each lap, they might need to wait for everyone to finish the current lap before starting the next one.
+
+```java
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class CyclicBarrierExample {
+
+    public static void main(String[] args) {
+        int numPlayers = 3;
+        // The barrier will release 3 threads.
+        // The optional Runnable (second argument) will be executed once all threads arrive.
+        CyclicBarrier barrier = new CyclicBarrier(numPlayers, () -> {
+            System.out.println("\n--- All players ready for the next phase! ---\n");
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(numPlayers);
+
+        for (int i = 0; i < numPlayers; i++) {
+            final int playerNumber = i + 1;
+            executor.submit(() -> {
+                try {
+                    System.out.println("Player " + playerNumber + " is at the starting line (Phase 1).");
+                    Thread.sleep((long) (Math.random() * 1000)); // Simulate preparation time
+                    System.out.println("Player " + playerNumber + " has finished preparations.");
+
+                    // Wait for all players to be ready at the starting line
+                    barrier.await(); // Players wait here
+
+                    System.out.println("Player " + playerNumber + " is running Lap 1 (Phase 2).");
+                    Thread.sleep((long) (Math.random() * 1500)); // Simulate running lap 1
+                    System.out.println("Player " + playerNumber + " has finished Lap 1.");
+
+                    // Wait for all players to finish Lap 1
+                    barrier.await(); // Players wait here again (barrier is cyclic)
+
+                    System.out.println("Player " + playerNumber + " is running Lap 2 (Phase 3).");
+                    Thread.sleep((long) (Math.random() * 1200)); // Simulate running lap 2
+                    System.out.println("Player " + playerNumber + " has finished Lap 2.");
+
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    System.err.println("Player " + playerNumber + " was interrupted or barrier broken: " + e.getMessage());
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        executor.shutdown();
+        System.out.println("Main thread finished submitting tasks.");
+    }
+}
+```
+
+\<hr/\>
+
+### `Exchanger`
+
+An `Exchanger` is a synchronization point at which two threads can **exchange objects**. Each thread calls the `exchange()` method, and when both threads have called it, they atomically swap the objects passed to the method. It's useful for scenarios where two threads need to hand off data to each other.
+
+**Example Scenario:** Imagine two workers (threads) processing different types of data. Worker A produces data for Worker B, and Worker B produces data for Worker A. They meet at a specific point to exchange the data.
+
+```java
+import java.util.concurrent.Exchanger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class ExchangerExample {
+
+    public static void main(String[] args) {
+        Exchanger<String> exchanger = new Exchanger<>();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        // Worker A
+        executor.submit(() -> {
+            try {
+                String dataForB = "Data from Worker A to B";
+                System.out.println("Worker A: Producing -> '" + dataForB + "'");
+                Thread.sleep((long) (Math.random() * 1000)); // Simulate work
+                System.out.println("Worker A: Waiting to exchange...");
+
+                // Exchange data with Worker B
+                String receivedFromB = exchanger.exchange(dataForB);
+                System.out.println("Worker A: Received <- '" + receivedFromB + "' (from Worker B)");
+
+            } catch (InterruptedException e) {
+                System.err.println("Worker A interrupted: " + e.getMessage());
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        // Worker B
+        executor.submit(() -> {
+            try {
+                String dataForA = "Data from Worker B to A";
+                System.out.println("Worker B: Producing -> '" + dataForA + "'");
+                Thread.sleep((long) (Math.random() * 1500)); // Simulate work
+                System.out.println("Worker B: Waiting to exchange...");
+
+                // Exchange data with Worker A
+                String receivedFromA = exchanger.exchange(dataForA);
+                System.out.println("Worker B: Received <- '" + receivedFromA + "' (from Worker A)");
+
+            } catch (InterruptedException e) {
+                System.err.println("Worker B interrupted: " + e.getMessage());
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        executor.shutdown();
+        System.out.println("Main thread finished submitting tasks.");
+    }
+}
+```
